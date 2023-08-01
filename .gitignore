@@ -1,0 +1,5 @@
+*/.vscode/*
+*/datasets/*
+tempfile.txt
+*/__pychache__/*
+*/h2o/*
