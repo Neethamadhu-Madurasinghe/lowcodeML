@@ -438,6 +438,8 @@ async def page4(q: Q):
     # Since this page is interactive, we want to update its card instead of recreating it every time, so ignore 'form' card on drop.
     clear_cards(q, ["form"])
 
+    # q.user.x = ['a', 'b']
+    # q.user.y = 'c'
     add_card(
         q,
         "info",
@@ -457,8 +459,7 @@ async def page4(q: Q):
         ui.form_card(
             box="vertical",
             items=[
-                ui.text_l("No model has been trained"),
-                ui.text_l(q.user.x[0]) if q.user.x else ui.text_l("Nothing found"),
+                ui.text_l("No model has been trained")
             ],
         ),
         )
@@ -466,16 +467,65 @@ async def page4(q: Q):
 
     if q.args.select_realtime:
         # Generate fields for each column
-        add_card(
-            q,
-            "real_time",
-            ui.form_card(
-                box="vertical",
-                items=[
+        q.user.real_time_values = {}
 
-                ],
-            ),
-        )
+        render_dynamic_fields(q)
+        
+
+        return
+    
+    if q.args.predict_realtime:
+        isError = False
+        # Validate
+        for x in q.user.x:
+            q.user.real_time_values[x] = q.args[x]
+            if q.args[x] is '':
+                isError = True
+
+        
+        render_dynamic_fields(q)
+        if not isError:
+             # Make predictions
+            
+            # Make a datafram
+            dict = q.user.real_time_values
+            for key in dict:
+                dict[key] = [dict[key]]
+
+
+            df = pd.DataFrame(dict)
+            df = h2o.H2OFrame(df)
+
+            preds = q.user.aml.leader.predict(df)
+
+            add_card(
+                q,
+                "Predictions",
+                ui.form_card(
+                    box="vertical",
+                    items=[
+                        ui.text_l("Predictions"),
+                        ui.table(
+                            name="table",
+                            columns=[
+                                *[ui.table_column(name=col, label=col) for col in q.user.x],
+                                ui.table_column(name="pred_col", label="Prediction") 
+                            ],
+                            rows=[
+                                ui.table_row(
+                                    name=f"row0",
+                                    cells=[*[str(df[0, col]) for col in q.user.x]  ,*[str(y) for y in preds[0, :].getrow()]],
+                                )
+                            ],
+                        ),
+                    ],
+                ),
+            )
+
+
+        
+           
+
 
         return
 
@@ -495,6 +545,12 @@ async def page4(q: Q):
         return
     
     if q.args.data_files:
+        link = q.args.data_files[0]
+        local_path = await q.site.download(
+            link, f"./inference_data/{os.path.basename(link)}"
+        )
+            
+
         add_card(
             q,
             "progress",
@@ -507,7 +563,7 @@ async def page4(q: Q):
         await q.page.save()
 
         # Read csv
-        df = pd.read_csv(f"./datasets/{q.user.data_file}")
+        df = pd.read_csv(local_path)
         df = h2o.H2OFrame(df)
 
         try:
@@ -540,8 +596,11 @@ async def page4(q: Q):
                 ),
             )
 
+            os.remove(local_path)
+
         except Exception as e:
             print(e)
+            clear_cards(q, ["info"])
             
         return
 
@@ -747,3 +806,18 @@ def get_image_from_matplotlib(matplotlib_obj):
     matplotlib_obj.savefig(buffer, format="png")
     buffer.seek(0)
     return base64.b64encode(buffer.read()).decode("utf-8")
+
+
+# Render input fields dynamically for real time predictions
+def render_dynamic_fields(q: Q):
+    add_card(
+            q,
+            "real_time",
+            ui.form_card(
+                box="vertical",
+                items=[
+                    *[ui.textbox(name=x, label=x, value= q.user.real_time_values[x] if q.user.real_time_values.get(x) else None, required=True) for x in q.user.x],
+                    ui.button(name='predict_realtime', label='Predict', primary=True),
+                ],
+            ),
+        )
