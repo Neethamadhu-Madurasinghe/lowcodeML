@@ -3,3 +3,4 @@ datasets/*
 temp_file.txt
 __pycache__/*
 h2o/*
+inference_data/*
