@@ -30,6 +30,7 @@ This will start the app at <http://localhost:10101/#import>.
 
 1. Build docker image
 ```sh
+pip freeze > requirements.txt
 sudo docker build --platform linux/x86_64 --build-arg PYTHON_VERSION=3.10.10 --build-arg WAVE_VERSION=0.26.1 --build-arg PYTHON_MODULE="src.app" -t nocodeml:0.1.0 .
 ```
 2. Run
