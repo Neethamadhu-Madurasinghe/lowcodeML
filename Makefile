@@ -1,16 +1,20 @@
 # Makefile to set up virtual environment and install required packages
 
-setup:
+
+venv: 
+	python3.10 -m venv h2o
+
+run:
+	./h2o/bin/wave run --no-reload src.app
+
+setup: venv
 	mkdir datasets
 	mkdir inference_data
-	virtualenv h2o
-	sudo apt install python3-virtualenv
-	. h2o/bin/activate && \
-		pip install tabulate && \
-		pip install future && \
-		pip install matplotlib && \
-		pip install h2o-wave && \
-		pip install pandas && \
-		pip install -f http://h2o-release.s3.amazonaws.com/h2o/latest_stable_Py.html h2o
+	./h2o/bin/python3.10 -m pip install tabulate \
+		future \
+		matplotlib \
+		h2o-wave \
+		pandas
+	./h2o/bin/python3.10 -m pip install -f http://h2o-release.s3.amazonaws.com/h2o/latest_stable_Py.html h2o
 
-.PHONY: setup
+.PHONY: venv run setup

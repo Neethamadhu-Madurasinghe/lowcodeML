@@ -3,7 +3,7 @@
 ## Video Demo
 
 ## Getting Started
-Tested on Python 3.10.10
+Tested on Python 3.10
 
 1. Clone the repo
 
@@ -11,23 +11,17 @@ Tested on Python 3.10.10
 git clone https://github.com/Neethamadhu-Madurasinghe/nocodeML.git
 ```
 
-2. Execute make file
+2. setup environment
 
 ```sh
 cd nocodeML
 make setup
 ```
 
-3. Switch to the python virtual environment
+3. Run the app
 
 ```sh
-source h2o/bin/activate
-```
-
-4. Run the app
-
-```sh
-wave run src.app
+make run
 ```
 
 This will start the app at <http://localhost:10101>.
