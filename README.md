@@ -1,42 +1,44 @@
-# Getting Started with H2O Wave
+# Nocode ML Using H20 AutoML and H2O Wave
 
-This project was bootstrapped with `wave init` command.
+## Video Demo
 
-## Running the app
+## Getting Started
+Tested on Python 3.10.10
 
-Make sure you have activated a Python virtual environment with `h2o-wave` installed.
-
-If you haven't created a python env yet, simply run the following command (assuming Python 3.7 is installed properly).
-
-For MacOS / Linux:
+1. Clone the repo
 
 ```sh
-python3 -m venv venv
-source venv/bin/activate
-pip install h2o-wave
+git clone https://github.com/Neethamadhu-Madurasinghe/nocodeML.git
 ```
 
-For Windows:
+2. Execute make file
 
 ```sh
-python3 -m venv venv
-venv\Scripts\activate
-pip install h2o-wave
+cd nocodeML
+make setup
 ```
 
-Once the virtual environment is setup and active, run:
+3. Switch to the python virtual environment
 
 ```sh
-wave run app.py
+source h2o/bin/activate
 ```
 
-Which will start a Wave app at <http://localhost:10101>.
+4. Run the app
 
-## Interactive examples
+```sh
+wave run src.app
+```
 
-If you prefer learning by doing, you can run `wave fetch` command that will download all the existing small Python examples that show Wave in action. The best part is that all these examples are interactive, meaning you can edit their code directly within the browser and observe the changes.
+This will start the app at <http://localhost:10101>.
+
+## Usecases
+
+This app can be used to quicky train and use Regression and classification models. Supports both real time and batch predictions
 
 ## Learn More
 
+To learn more about H2O AutoML, check out the [docs](https://docs.h2o.ai/h2o/latest-stable/h2o-docs/automl.html).
+
 To learn more about H2O Wave, check out the [docs](https://wave.h2o.ai/).
-# lowcodeML
+
