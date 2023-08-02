@@ -463,9 +463,11 @@ async def page4(q: Q):
             ],
         ),
         )
-        # return
+        return
 
     if q.args.select_realtime:
+        
+        add_back_button(q)
         # Generate fields for each column
         q.user.real_time_values = {}
 
@@ -475,6 +477,8 @@ async def page4(q: Q):
         return
     
     if q.args.predict_realtime:
+        add_back_button(q)
+
         isError = False
         # Validate
         for x in q.user.x:
@@ -485,43 +489,59 @@ async def page4(q: Q):
         
         render_dynamic_fields(q)
         if not isError:
-             # Make predictions
-            
-            # Make a datafram
-            dict = q.user.real_time_values
-            for key in dict:
-                dict[key] = [dict[key]]
+
+            try:
+                # Make predictions
+                
+                # Make a datafram
+                dict = q.user.real_time_values
+                for key in dict:
+                    dict[key] = [dict[key]]
 
 
-            df = pd.DataFrame(dict)
-            df = h2o.H2OFrame(df)
+                df = pd.DataFrame(dict)
+                df = h2o.H2OFrame(df)
 
-            preds = q.user.aml.leader.predict(df)
+                preds = q.user.aml.leader.predict(df)
 
-            add_card(
-                q,
-                "Predictions",
-                ui.form_card(
-                    box="vertical",
-                    items=[
-                        ui.text_l("Predictions"),
-                        ui.table(
-                            name="table",
-                            columns=[
-                                *[ui.table_column(name=col, label=col) for col in q.user.x],
-                                ui.table_column(name="pred_col", label="Prediction") 
-                            ],
-                            rows=[
-                                ui.table_row(
-                                    name=f"row0",
-                                    cells=[*[str(df[0, col]) for col in q.user.x]  ,*[str(y) for y in preds[0, :].getrow()]],
-                                )
-                            ],
-                        ),
-                    ],
-                ),
-            )
+                add_card(
+                    q,
+                    "Predictions",
+                    ui.form_card(
+                        box="vertical",
+                        items=[
+                            ui.text_l("Predictions"),
+                            ui.table(
+                                name="table",
+                                columns=[
+                                    *[ui.table_column(name=col, label=col) for col in q.user.x],
+                                    ui.table_column(name="pred_col", label="Prediction") 
+                                ],
+                                rows=[
+                                    ui.table_row(
+                                        name=f"row0",
+                                        cells=[*[str(df[0, col]) for col in q.user.x]  ,*[str(y) for y in preds[0, :].getrow()]],
+                                    )
+                                ],
+                            ),
+                        ],
+                    ),
+                )
 
+            except Exception as e:
+                clear_cards(q, ["info", "back_form"])
+                #  Show error card
+                add_card(
+                    q,
+                    "error_realtime",
+                    ui.tall_info_card(
+                        box="vertical",
+                        name="",
+                        title="Error",
+                        caption="Something went wrong, try again",
+                        icon="ErrorBadge",
+                    ),
+                )
 
         
            
@@ -530,6 +550,8 @@ async def page4(q: Q):
         return
 
     if q.args.select_batch:
+        add_back_button(q)
+
         # Create a form to upload data
         add_card(
             q,
@@ -545,6 +567,8 @@ async def page4(q: Q):
         return
     
     if q.args.data_files:
+        add_back_button(q)
+
         link = q.args.data_files[0]
         local_path = await q.site.download(
             link, f"./inference_data/{os.path.basename(link)}"
@@ -568,7 +592,7 @@ async def page4(q: Q):
 
         try:
             preds = q.user.aml.leader.predict(df)
-            clear_cards(q, ["info"])
+            clear_cards(q, ["info", "back_form"])
 
 
             add_card(
@@ -600,7 +624,19 @@ async def page4(q: Q):
 
         except Exception as e:
             print(e)
-            clear_cards(q, ["info"])
+            clear_cards(q, ["info", "back_form"])
+            #  Show error card
+            add_card(
+                q,
+                "error_batch",
+                ui.tall_info_card(
+                    box="vertical",
+                    name="",
+                    title="Error",
+                    caption="Something went wrong, try again",
+                    icon="ErrorBadge",
+                ),
+            )
             
         return
 
@@ -821,3 +857,16 @@ def render_dynamic_fields(q: Q):
                 ],
             ),
         )
+    
+
+def add_back_button(q: Q):
+    add_card(
+        q,
+        "back_form",
+        ui.form_card(
+            box="vertical",
+            items=[
+                ui.button(name='go_back', label='Back'),
+            ],
+        ),
+    )
