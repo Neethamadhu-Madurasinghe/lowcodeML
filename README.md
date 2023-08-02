@@ -24,7 +24,7 @@ make setup
 make run
 ```
 
-This will start the app at <http://localhost:10101>.
+This will start the app at <http://localhost:10101/#import>.
 
 ## Docker
 
@@ -37,7 +37,7 @@ sudo docker build --platform linux/x86_64 --build-arg PYTHON_VERSION=3.10.10 --b
 sudo docker run --rm --name nocodeml -p 10101:8080 -e PORT=8080 nocodeml:0.1.0
 ```
 
-This will start the app at <http://localhost:10101>.
+This will start the app at <http://localhost:10101/#import>.
 
 ## Usecases
 
