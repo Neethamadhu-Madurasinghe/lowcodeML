@@ -1,45 +1,19 @@
-import os, io, base64
-from h2o_wave import main, app, Q, ui, on, handle_on, data
+import os
+import io
+import base64
+from h2o_wave import main, app, Q, ui, on, handle_on
 from typing import Optional, List
 import h2o
 from h2o.automl import H2OAutoML
 import pandas as pd
-from tabulate import tabulate
-
-FIGSIZE = (6, 2)
-GRID_IMG_SIZE = "400px"
+from .config import *
 
 
-# Use for page cards that should be removed when navigating away.
-# For pages that should be always present on screen use q.page[key] = ...
-def add_card(q, name, card) -> None:
-    q.client.cards.add(name)
-    q.page[name] = card
+@on("#import")
+async def page_import(q: Q):
+    # When routing, drop all the cards except of the main ones (header, sidebar, meta).
+    clear_cards(q)
 
-
-# Remove all the cards related to navigation.
-def clear_cards(q, ignore: Optional[List[str]] = []) -> None:
-    if not q.client.cards:
-        return
-    for name in q.client.cards.copy():
-        if name not in ignore:
-            del q.page[name]
-            q.client.cards.remove(name)
-
-
-@on("#page1")
-async def page1(q: Q):
-    # Move to train page if the user clicks Next button after uploading data
-    if q.args.move_to_train:
-        q.page["header"]["tabs"].value = "#page2"
-        await page2(q)
-        return
-
-    links = q.args.user_files
-
-    clear_cards(
-        q
-    )  # When routing, drop all the cards except of the main ones (header, sidebar, meta).
     add_card(
         q,
         "info",
@@ -52,25 +26,21 @@ async def page1(q: Q):
         ),
     )
 
+    # If there are any files, download them and show their sizes to the user
+    links = q.args.user_files
     if links:
         items = []
         for link in links:
             local_path = await q.site.download(
                 link, f"./datasets/{os.path.basename(link)}"
             )
-            #
-            # The file is now available locally; process the file.
-            # To keep this example simple, we just read the file size.
-            #
+
             size = os.path.getsize(local_path)
 
             # items.append(ui.link(label=f'{os.path.basename(link)} ({size} bytes)', download=True, path=link))
             items.append(
                 ui.text_xl(f"File uploaded: {os.path.basename(link)} ({size} bytes)")
             )
-
-            # Clean up
-            # os.remove(local_path)
 
         add_card(
             q,
@@ -79,11 +49,12 @@ async def page1(q: Q):
                 box="vertical",
                 items=[
                     *items,
-                    ui.button(name="move_to_train", label="Next", primary=True),
+                    ui.button(name="#train", label="Next", primary=True),
                 ],
             ),
         )
 
+    # If file upload argument is not present, then show a form to upload files
     else:
         add_card(
             q,
@@ -97,22 +68,19 @@ async def page1(q: Q):
         )
 
 
-@on("#page2")
-async def page2(q: Q):
-    clear_cards(
-        q
-    )  # When routing, drop all the cards except of the main ones (header, sidebar, meta).
+@on("#train")
+async def page_train(q: Q):
+    # Set the select tab on UI
+    q.page["header"]["tabs"].value = "#train"
 
-    # Move to train page if the user clicks Next button after uploading data
+    clear_cards(q)
+
+    # If user clicks on start trainning
     if q.args.run_model:
-        await start_training(q)
-        return
+        if await start_training(q):
+            return
 
-    if q.args.show_results:
-        q.page["header"]["tabs"].value = "#page3"
-        await page3(q)
-        return
-
+    # Show title
     add_card(
         q,
         "info",
@@ -125,7 +93,6 @@ async def page2(q: Q):
         ),
     )
 
-
     # Read all available .csv file names
     data_files = os.listdir("./datasets/")
     q.user.data_file = data_file = (
@@ -135,6 +102,7 @@ async def page2(q: Q):
     if q.args.data_file:
         q.user.data_file = data_file = q.args["data_file"]
 
+    # split radio (default 0.8)
     q.user.train_split = train_split = q.user.train_split or 0.8
 
     if q.args.train_split:
@@ -142,7 +110,7 @@ async def page2(q: Q):
 
     rows = []
 
-    # Get the column
+    # Get the target column
     if data_file:
         df = pd.read_csv(f"./datasets/{data_file}")
         rows = list(df.columns.values)
@@ -153,24 +121,29 @@ async def page2(q: Q):
     else:
         q.user.target_col = target_col = rows[0] if len(rows) > 0 else None
 
+    # Maxium number of models
     max_models = q.user.max_models or 10
 
     if q.args.max_models:
         q.user.max_models = max_models = q.args["max_models"]
 
+    # Maxiumum run time - default 0 (considered as unilimited)
     max_run_time = q.user.max_run_time or 0
 
     if q.args.max_run_time is not None:
         q.user.max_run_time = max_run_time = q.args["max_run_time"]
 
+    # Stop metric
     stop_metric = q.user.stop_metric or "AUTO"
 
     if q.args.stop_metric:
         q.user.stop_metric = stop_metric = q.args["stop_metric"]
 
+    # Selected algorthms
     algos = q.user.algos or []
     q.user.algos = algos = q.args["algos"]
 
+    # Show a form to select training options
     add_card(
         q,
         "train_settings",
@@ -253,15 +226,14 @@ async def page2(q: Q):
     )
 
 
-@on("#page3")
-async def page3(q: Q):
+@on("#results")
+async def page_result(q: Q):
+    # Set the select tab on UI
+    q.page["header"]["tabs"].value = "#results"
+
     clear_cards(q)
 
-    if q.args.show_infer:
-        q.page["header"]["tabs"].value = "#page4"
-        await page4(q)
-        return
-
+    # Title card
     add_card(
         q,
         "info",
@@ -274,24 +246,23 @@ async def page3(q: Q):
         ),
     )
 
+    # Is a model is not available, tell it to the user
     if not q.user.aml:
         add_card(
-        q,
-        "no_data",
-        ui.form_card(
-            box="vertical",
-            items=[
-                ui.text_l("No model has been trained"),
-            ],
-        ),
+            q,
+            "no_data",
+            ui.form_card(
+                box="vertical",
+                items=[
+                    ui.text_l("No model has been trained"),
+                ],
+            ),
         )
         return
 
     # Display leadboard
     lb = q.user.aml.leaderboard
     colums = lb.columns
-
-    
 
     add_card(
         q,
@@ -300,7 +271,7 @@ async def page3(q: Q):
             box="vertical",
             items=[
                 ui.text_l("Model Leader Board"),
-                ui.button(name="show_infer", label="Next", primary=True),
+                ui.button(name="#predict", label="Next", primary=True),
                 ui.table(
                     name="table",
                     columns=[
@@ -337,56 +308,53 @@ async def page3(q: Q):
         )
 
         add_card(
-        q,
-        "img_pf_plot",
-        ui.image_card(
-            box=ui.box("grid", width=GRID_IMG_SIZE),
-            title="Pareto Front Plot",
-            type="png",
-            image=get_image_from_matplotlib(q.user.pf_plot),
-        ),
-    )
+            q,
+            "img_pf_plot",
+            ui.image_card(
+                box=ui.box("grid", width=GRID_IMG_SIZE),
+                title="Pareto Front Plot",
+                type="png",
+                image=get_image_from_matplotlib(q.user.pf_plot),
+            ),
+        )
 
     except:
-        print('Error: pareto_front')
+        print("Error: pareto_front")
 
-    
     try:
         q.user.mc_plot = q.user.aml.model_correlation_heatmap(
             frame=q.app.validation_data, figsize=(FIGSIZE[0], FIGSIZE[0])
         )
 
         add_card(
-        q,
-        "img_mc_plot",
-        ui.image_card(
-            box=ui.box("grid", width=GRID_IMG_SIZE),
-            title="Model correlation heatmap",
-            type="png",
-            image=get_image_from_matplotlib(q.user.mc_plot),
-        ),
-    )
+            q,
+            "img_mc_plot",
+            ui.image_card(
+                box=ui.box("grid", width=GRID_IMG_SIZE),
+                title="Model correlation heatmap",
+                type="png",
+                image=get_image_from_matplotlib(q.user.mc_plot),
+            ),
+        )
 
     except:
-        print('Error: model_correlation_heatmap')
-
+        print("Error: model_correlation_heatmap")
 
     try:
         q.user.vh_plot = q.user.aml.varimp_heatmap(figsize=(FIGSIZE[0], FIGSIZE[0]))
         add_card(
-        q,
-        "img_vh_plot",
-        ui.image_card(
-            box=ui.box("grid", width=GRID_IMG_SIZE),
-            title="Varimp Heatmap",
-            type="png",
-            image=get_image_from_matplotlib(q.user.vh_plot),
-        ),
-    )
+            q,
+            "img_vh_plot",
+            ui.image_card(
+                box=ui.box("grid", width=GRID_IMG_SIZE),
+                title="Varimp Heatmap",
+                type="png",
+                image=get_image_from_matplotlib(q.user.vh_plot),
+            ),
+        )
 
     except:
-        print('Error: varimp_heatmap')
-
+        print("Error: varimp_heatmap")
 
     # Plot leader's stats
     try:
@@ -395,18 +363,17 @@ async def page3(q: Q):
         )
 
         add_card(
-        q,
-        "img_shap_sum",
-        ui.image_card(
-            box=ui.box("grid", width=GRID_IMG_SIZE),
-            title="SHAP Summary",
-            type="png",
-            image=get_image_from_matplotlib(q.user.shap_sum),
-        ),
-    )
+            q,
+            "img_shap_sum",
+            ui.image_card(
+                box=ui.box("grid", width=GRID_IMG_SIZE),
+                title="SHAP Summary",
+                type="png",
+                image=get_image_from_matplotlib(q.user.shap_sum),
+            ),
+        )
     except:
-        print('Error: shap_summary_plot')
-
+        print("Error: shap_summary_plot")
 
     try:
         q.user.learning_curve = q.user.aml.leader.learning_curve_plot(
@@ -414,32 +381,27 @@ async def page3(q: Q):
         )
 
         add_card(
-        q,
-        "img_learning_curve",
-        ui.image_card(
-            box=ui.box("grid", width=GRID_IMG_SIZE),
-            title="Leraning Curve",
-            type="png",
-            image=get_image_from_matplotlib(q.user.learning_curve),
-        ),
-    )
+            q,
+            "img_learning_curve",
+            ui.image_card(
+                box=ui.box("grid", width=GRID_IMG_SIZE),
+                title="Leraning Curve",
+                type="png",
+                image=get_image_from_matplotlib(q.user.learning_curve),
+            ),
+        )
     except:
-        print('Error: learning_curve_plot')
-    
+        print("Error: learning_curve_plot")
 
-    
 
-    
+@on("#predict")
+async def page_predict(q: Q):
+    # Set the select tab on UI
+    q.page["header"]["tabs"].value = "#predict"
 
-# Find 4
-@on("#page4")
-async def page4(q: Q):
-    # When routing, drop all the cards except of the main ones (header, sidebar, meta).
-    # Since this page is interactive, we want to update its card instead of recreating it every time, so ignore 'form' card on drop.
     clear_cards(q, ["form"])
 
-    # q.user.x = ['a', 'b']
-    # q.user.y = 'c'
+    # Title card
     add_card(
         q,
         "info",
@@ -452,30 +414,29 @@ async def page4(q: Q):
         ),
     )
 
+    # If a model is not available, show it to user
     if not q.user.aml:
         add_card(
-        q,
-        "no_data",
-        ui.form_card(
-            box="vertical",
-            items=[
-                ui.text_l("No model has been trained")
-            ],
-        ),
+            q,
+            "no_data",
+            ui.form_card(
+                box="vertical",
+                items=[ui.text_l("No model has been trained")],
+            ),
         )
         return
 
+    # If user clicks on real time, show a back button and a all the required fields to be filled
     if q.args.select_realtime:
-        
         add_back_button(q)
         # Generate fields for each column
         q.user.real_time_values = {}
 
         render_dynamic_fields(q)
-        
 
         return
-    
+
+    #  Make the prediction
     if q.args.predict_realtime:
         add_back_button(q)
 
@@ -483,21 +444,18 @@ async def page4(q: Q):
         # Validate
         for x in q.user.x:
             q.user.real_time_values[x] = q.args[x]
-            if q.args[x] is '':
+            if q.args[x] == "":
                 isError = True
 
-        
         render_dynamic_fields(q)
         if not isError:
-
             try:
-                # Make predictions
-                
-                # Make a datafram
+                # Make prediction
+
+                # Make a dataframe
                 dict = q.user.real_time_values
                 for key in dict:
                     dict[key] = [dict[key]]
-
 
                 df = pd.DataFrame(dict)
                 df = h2o.H2OFrame(df)
@@ -514,13 +472,21 @@ async def page4(q: Q):
                             ui.table(
                                 name="table",
                                 columns=[
-                                    *[ui.table_column(name=col, label=col) for col in q.user.x],
-                                    ui.table_column(name="pred_col", label="Prediction") 
+                                    *[
+                                        ui.table_column(name=col, label=col)
+                                        for col in q.user.x
+                                    ],
+                                    ui.table_column(
+                                        name="pred_col", label="Prediction"
+                                    ),
                                 ],
                                 rows=[
                                     ui.table_row(
                                         name=f"row0",
-                                        cells=[*[str(df[0, col]) for col in q.user.x]  ,*[str(y) for y in preds[0, :].getrow()]],
+                                        cells=[
+                                            *[str(df[0, col]) for col in q.user.x],
+                                            *[str(y) for y in preds[0, :].getrow()],
+                                        ],
                                     )
                                 ],
                             ),
@@ -543,12 +509,9 @@ async def page4(q: Q):
                     ),
                 )
 
-        
-           
-
-
         return
 
+    # If user selects batch option, show a back button and a file upload button
     if q.args.select_batch:
         add_back_button(q)
 
@@ -559,13 +522,16 @@ async def page4(q: Q):
             ui.form_card(
                 box="vertical",
                 items=[
-                    ui.file_upload(name="data_files", label="Upload",),
+                    ui.file_upload(
+                        name="data_files",
+                        label="Upload",
+                    ),
                 ],
             ),
         )
 
         return
-    
+
     if q.args.data_files:
         add_back_button(q)
 
@@ -573,7 +539,6 @@ async def page4(q: Q):
         local_path = await q.site.download(
             link, f"./inference_data/{os.path.basename(link)}"
         )
-            
 
         add_card(
             q,
@@ -594,7 +559,6 @@ async def page4(q: Q):
             preds = q.user.aml.leader.predict(df)
             clear_cards(q, ["info", "back_form"])
 
-
             add_card(
                 q,
                 "Predictions",
@@ -605,13 +569,19 @@ async def page4(q: Q):
                         ui.table(
                             name="table",
                             columns=[
-                                *[ui.table_column(name=col, label=col) for col in q.user.x],
-                                ui.table_column(name="pred_col", label="Prediction") 
+                                *[
+                                    ui.table_column(name=col, label=col)
+                                    for col in q.user.x
+                                ],
+                                ui.table_column(name="pred_col", label="Prediction"),
                             ],
                             rows=[
                                 ui.table_row(
                                     name=f"row{i}",
-                                    cells=[*[str(df[i, col]) for col in q.user.x]  ,*[str(y) for y in preds[i, :].getrow()]],
+                                    cells=[
+                                        *[str(df[i, col]) for col in q.user.x],
+                                        *[str(y) for y in preds[i, :].getrow()],
+                                    ],
                                 )
                                 for i in range(preds.nrows)
                             ],
@@ -637,26 +607,21 @@ async def page4(q: Q):
                     icon="ErrorBadge",
                 ),
             )
-            
-        return
 
+        return
 
     # Ask user for real time or batch
     add_card(
-            q,
-            "select_mode",
-            ui.form_card(
-                box="vertical",
-                items=[
-                    ui.button(name='select_realtime', label='Real time'),
-                    ui.button(name='select_batch', label='Batch'),
-                ],
-            ),
-        )
-
-    
-
-    
+        q,
+        "select_mode",
+        ui.form_card(
+            box="vertical",
+            items=[
+                ui.button(name="select_realtime", label="Real time"),
+                ui.button(name="select_batch", label="Batch"),
+            ],
+        ),
+    )
 
 
 async def init(q: Q) -> None:
@@ -688,19 +653,19 @@ async def init(q: Q) -> None:
     )
     q.page["header"] = ui.header_card(
         box="header",
-        title="My app",
-        subtitle="Let's conquer the world",
+        title="Low code machine learning",
+        subtitle="ML for everyone",
         image="https://wave.h2o.ai/img/h2o-logo.svg",
         secondary_items=[
             ui.tabs(
                 name="tabs",
-                value=f'#{q.args["#"]}' if q.args["#"] else "#page1",
+                value=f'#{q.args["#"]}' if q.args["#"] else "#import",
                 link=True,
                 items=[
-                    ui.tab(name="#page1", label="Import"),
-                    ui.tab(name="#page2", label="Train"),
-                    ui.tab(name="#page3", label="Results"),
-                    ui.tab(name="#page4", label="Predict"),
+                    ui.tab(name="#import", label="Import"),
+                    ui.tab(name="#train", label="Train"),
+                    ui.tab(name="#results", label="Results"),
+                    ui.tab(name="#predict", label="Predict"),
                 ],
             ),
         ],
@@ -715,7 +680,7 @@ async def init(q: Q) -> None:
     )
     # If no active hash present, render page1.
     if q.args["#"] is None:
-        await page1(q)
+        await page_import(q)
 
 
 @app("/")
@@ -732,6 +697,10 @@ async def serve(q: Q):
 
 
 async def start_training(q: Q):
+    # If there is no data file, cancel
+    if q.user.data_file is None or q.user.data_file == "":
+        return False
+
     h2o.init()
     df = pd.read_csv(f"./datasets/{q.user.data_file}")
     df = h2o.H2OFrame(df)
@@ -746,7 +715,7 @@ async def start_training(q: Q):
 
     # Save x and y to be used later
     q.user.x = x
-    q.user.y = y 
+    q.user.y = y
 
     max_models = q.user.max_models
     max_run_time = q.user.max_run_time
@@ -826,15 +795,31 @@ async def start_training(q: Q):
         "train_settings",
         ui.form_card(
             box="vertical",
-            items=[ui.button(name="show_results", label="Next", primary=True)],
+            items=[ui.button(name="#results", label="Next", primary=True)],
         ),
     )
 
-    return
-
-    # Image from matplotlib object
+    return True
 
 
+# Use for page cards that should be removed when navigating away.
+# For pages that should be always present on screen use q.page[key] = ...
+def add_card(q, name, card) -> None:
+    q.client.cards.add(name)
+    q.page[name] = card
+
+
+# Remove all the cards related to navigation.
+def clear_cards(q, ignore: Optional[List[str]] = []) -> None:
+    if not q.client.cards:
+        return
+    for name in q.client.cards.copy():
+        if name not in ignore:
+            del q.page[name]
+            q.client.cards.remove(name)
+
+
+# Image from matplotlib object
 def get_image_from_matplotlib(matplotlib_obj):
     if hasattr(matplotlib_obj, "figure"):
         matplotlib_obj = matplotlib_obj.figure()
@@ -847,18 +832,29 @@ def get_image_from_matplotlib(matplotlib_obj):
 # Render input fields dynamically for real time predictions
 def render_dynamic_fields(q: Q):
     add_card(
-            q,
-            "real_time",
-            ui.form_card(
-                box="vertical",
-                items=[
-                    *[ui.textbox(name=x, label=x, value= q.user.real_time_values[x] if q.user.real_time_values.get(x) else None, required=True) for x in q.user.x],
-                    ui.button(name='predict_realtime', label='Predict', primary=True),
+        q,
+        "real_time",
+        ui.form_card(
+            box="vertical",
+            items=[
+                *[
+                    ui.textbox(
+                        name=x,
+                        label=x,
+                        value=q.user.real_time_values[x]
+                        if q.user.real_time_values.get(x)
+                        else None,
+                        required=True,
+                    )
+                    for x in q.user.x
                 ],
-            ),
-        )
-    
+                ui.button(name="predict_realtime", label="Predict", primary=True),
+            ],
+        ),
+    )
 
+
+# Add a back button
 def add_back_button(q: Q):
     add_card(
         q,
@@ -866,7 +862,7 @@ def add_back_button(q: Q):
         ui.form_card(
             box="vertical",
             items=[
-                ui.button(name='go_back', label='Back'),
+                ui.button(name="go_back", label="Back"),
             ],
         ),
     )

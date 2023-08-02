@@ -1,0 +1,2 @@
+FIGSIZE = (6, 2)
+GRID_IMG_SIZE = "400px"
