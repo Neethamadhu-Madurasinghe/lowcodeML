@@ -32,6 +32,19 @@ wave run src.app
 
 This will start the app at <http://localhost:10101>.
 
+## Docker
+
+1. Build docker image
+```sh
+sudo docker build --platform linux/x86_64 --build-arg PYTHON_VERSION=3.10.10 --build-arg WAVE_VERSION=0.26.1 --build-arg PYTHON_MODULE="src.app" -t nocodeml:0.1.0 .
+```
+2. Run
+```sh
+sudo docker run --rm --name nocodeml -p 10101:8080 -e PORT=8080 nocodeml:0.1.0
+```
+
+This will start the app at <http://localhost:10101>.
+
 ## Usecases
 
 This app can be used to quicky train and use Regression and classification models. Supports both real time and batch predictions
